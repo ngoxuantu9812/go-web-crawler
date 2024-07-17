@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    ports:
+        - 8080:8080
+    command: sleep 99999
+    volumes:
+        - ./:/app
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=mydatabase
+
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=mydatabase
