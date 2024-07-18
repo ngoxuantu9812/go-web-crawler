@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/net/html"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
-
-	_ "github.com/go-sql-driver/mysql"
+	"strings"
 )
 
 const keyServerAddr = "serverAddr"
@@ -35,7 +37,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-
+	mux.HandleFunc("/crawler", fetch)
 	ctx := context.Background()
 	server := &http.Server{
 		Addr:    ":8080",
@@ -52,4 +54,43 @@ func main() {
 	} else if err != nil {
 		fmt.Printf("error listening for server: %s\n", err)
 	}
+}
+
+func fetch(w http.ResponseWriter, r *http.Request) {
+	resp, err := http.Get("https://dantri.com.vn/")
+	if err != nil {
+		//return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		//return "", fmt.Errorf("error: failed to fetch URL %s: %s", url, resp.Status)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		//return "", err
+	}
+	doc, err := html.Parse(strings.NewReader(string(bodyBytes)))
+	if err != nil {
+	}
+
+	var links []string
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			for _, a := range n.Attr {
+				if a.Key == "href" {
+					links = append(links, a.Val)
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+
+	fmt.Println(links)
 }
