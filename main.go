@@ -37,7 +37,6 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/crawler", fetch)
 	ctx := context.Background()
 	server := &http.Server{
 		Addr:    ":8080",
@@ -47,7 +46,13 @@ func main() {
 			return ctx
 		},
 	}
-
+	bodyString, err := fetch()
+	links, err := parseHTML(bodyString)
+	for _, link := range links {
+		bodyStringDetail, _ := fetchDetail(link)
+		content, _ := parseHTMLDetail(bodyStringDetail)
+		fmt.Println(content)
+	}
 	err = server.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		fmt.Printf("server closed\n")
@@ -56,23 +61,28 @@ func main() {
 	}
 }
 
-func fetch(w http.ResponseWriter, r *http.Request) {
+func fetch() (string, error) {
 	resp, err := http.Get("https://dantri.com.vn/")
 	if err != nil {
-		//return "", err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		//return "", fmt.Errorf("error: failed to fetch URL %s: %s", url, resp.Status)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		//return "", err
+		return "", err
 	}
-	doc, err := html.Parse(strings.NewReader(string(bodyBytes)))
+	return string(bodyBytes), nil
+
+}
+
+func parseHTML(body string) ([]string, error) {
+	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
+		return nil, err
 	}
 
 	var links []string
@@ -81,7 +91,9 @@ func fetch(w http.ResponseWriter, r *http.Request) {
 		if n.Type == html.ElementNode && n.Data == "a" {
 			for _, a := range n.Attr {
 				if a.Key == "href" {
-					links = append(links, a.Val)
+					if strings.Contains(a.Val, "htm") {
+						links = append(links, a.Val)
+					}
 					break
 				}
 			}
@@ -92,5 +104,49 @@ func fetch(w http.ResponseWriter, r *http.Request) {
 	}
 	f(doc)
 
-	fmt.Println(links)
+	return links, nil
+}
+
+func fetchDetail(subUrl string) (string, error) {
+	resp, err := http.Get("https://dantri.com.vn" + subUrl)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(bodyBytes), nil
+
+}
+
+func parseHTMLDetail(body string) (string, error) {
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+
+	var content string
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Data == "div" {
+			for _, div := range n.Attr {
+				if div.Key == "class" && div.Val == "singular-wrap" {
+					content = div.Val
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+
+	return content, nil
 }
